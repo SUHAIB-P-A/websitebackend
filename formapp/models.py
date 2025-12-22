@@ -42,6 +42,21 @@ class CollectionForm(models.Model):
         verbose_name="City"
     )
 
+
+
+    course_selected = models.CharField(
+        max_length=100,
+        verbose_name="Course Selected",
+        blank=True,
+        null=True
+    )
+
+    colleges_selected = models.TextField(
+        verbose_name="Colleges Selected",
+        blank=True,
+        null=True
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Created At"
