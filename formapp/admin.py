@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CollectionForm
+from .models import CollectionForm, Enquiry
 
 
 @admin.register(CollectionForm)
@@ -11,5 +11,15 @@ class CollectionFormAdmin(admin.ModelAdmin):
         "phone_number",
         "plus_two_percentage",
         "city",
+        "created_at",
+    )
+
+@admin.register(Enquiry)
+class EnquiryAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "email",
+        "phone",
+        "message",
         "created_at",
     )
