@@ -1,6 +1,38 @@
 from django.db import models
 from django.core.validators import RegexValidator
+from django.contrib.auth.hashers import make_password, check_password
 
+class Staff(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Staff Name")
+    email = models.EmailField(unique=True, verbose_name="Email Address")
+    login_id = models.CharField(max_length=50, unique=True, verbose_name="Login ID")
+    password = models.CharField(max_length=255, verbose_name="Password")  # Stored as hash
+    active_status = models.BooleanField(default=True, verbose_name="Active Status")
+    
+    # StudentCount can be calculated dynamically, but if we need a field as per requirements:
+    # We will rely on dynamic properties for logic, but can store it if really needed.
+    # The requirement says "StudentCount" in the table. I'll add it but keep it updated?
+    # Actually, better to make it a property in Django admin or serializer, 
+    # but the prompt specifically asked for "Staff Table: ... StudentCount".
+    # I will stick to computing it to avoid sync issues, but for the table schema strictness:
+    # I'll omit the physical field 'student_count' to avoid redundancy errors unless strictly forced.
+    # A method is better.
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password)
+    
+    @property
+    def student_count(self):
+        # Count only active/assigned students?
+        return self.assigned_students.count() + self.assigned_enquiries.count()
+
+    def __str__(self):
+        return f"{self.name} ({self.login_id})"
 
 class CollectionForm(models.Model):
     first_name = models.CharField(
@@ -114,6 +146,15 @@ class CollectionForm(models.Model):
         verbose_name="Extra Data"
     )
 
+    assigned_staff = models.ForeignKey(
+        Staff,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_students',
+        verbose_name="Assigned Staff"
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Created At"
@@ -166,6 +207,15 @@ class Enquiry(models.Model):
         verbose_name="Query / Message",
         blank=True,
         null=True
+    )
+
+    assigned_staff = models.ForeignKey(
+        Staff,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_enquiries',
+        verbose_name="Assigned Staff"
     )
 
     created_at = models.DateTimeField(
