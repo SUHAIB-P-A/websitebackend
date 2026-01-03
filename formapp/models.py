@@ -218,6 +218,17 @@ class Enquiry(models.Model):
         verbose_name="Assigned Staff"
     )
 
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Connected', 'Connected'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='Pending',
+        verbose_name="Status"
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Created At"

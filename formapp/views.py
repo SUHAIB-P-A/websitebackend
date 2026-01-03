@@ -164,7 +164,7 @@ def enquiry_list(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'PUT', 'DELETE'])
 def enquiry_detail(request, pk):
     try:
         enquiry = Enquiry.objects.get(pk=pk)
@@ -174,6 +174,20 @@ def enquiry_detail(request, pk):
     if request.method == 'GET':
         serializer = EnquirySerializer(enquiry)
         return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        serializer = EnquirySerializer(enquiry, data=request.data)
+        if serializer.is_valid():
+            instance = serializer.save()
+            
+            # Check for explicit Auto Allocation request
+            if request.data.get('auto_allocate'):
+                allocate_staff(instance)
+                instance.refresh_from_db()
+                return Response(EnquirySerializer(instance).data)
+
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
         enquiry.delete()
