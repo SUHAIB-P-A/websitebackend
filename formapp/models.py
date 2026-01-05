@@ -160,6 +160,23 @@ class CollectionForm(models.Model):
         verbose_name="Created At"
     )
 
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('In Progress', 'In Progress'),
+        ('Completed', 'Completed'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='Pending',
+        verbose_name="Status"
+    )
+
+    is_read = models.BooleanField(
+        default=False,
+        verbose_name="Is Read"
+    )
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -227,6 +244,11 @@ class Enquiry(models.Model):
         choices=STATUS_CHOICES,
         default='Pending',
         verbose_name="Status"
+    )
+
+    is_read = models.BooleanField(
+        default=False,
+        verbose_name="Is Read"
     )
 
     created_at = models.DateTimeField(
