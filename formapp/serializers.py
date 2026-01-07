@@ -7,7 +7,7 @@ class StaffSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Staff
-        fields = ['id', 'name', 'email', 'login_id', 'password', 'active_status', 'student_count', 'created_at']
+        fields = ['id', 'name', 'email', 'login_id', 'password', 'active_status', 'student_count', 'created_at', 'phone', 'gender', 'dob', 'profile_image']
 
     def create(self, validated_data):
         password = validated_data.pop('password')

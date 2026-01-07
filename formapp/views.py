@@ -30,7 +30,13 @@ def staff_login(request):
                 "message": "Login successful",
                 "role": role, 
                 "staff_id": staff.id,
-                "name": staff.name
+                "name": staff.name,
+                "email": staff.email,
+                "login_id": staff.login_id,
+                "dob": staff.dob,
+                "gender": staff.gender,
+                "phone": staff.phone,
+                "image": staff.profile_image
             })
         else:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -55,6 +61,7 @@ def staff_list(request):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@csrf_exempt
 @api_view(['GET', 'PUT', 'DELETE'])
 def staff_detail(request, pk):
     try:
@@ -67,7 +74,7 @@ def staff_detail(request, pk):
         return Response(serializer.data)
 
     elif request.method == 'PUT':
-        serializer = StaffSerializer(staff, data=request.data)
+        serializer = StaffSerializer(staff, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

@@ -9,6 +9,12 @@ class Staff(models.Model):
     password = models.CharField(max_length=255, verbose_name="Password")  # Stored as hash
     active_status = models.BooleanField(default=True, verbose_name="Active Status")
     
+    # Profile Fields
+    phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")
+    gender = models.CharField(max_length=10, blank=True, null=True, verbose_name="Gender")
+    dob = models.DateField(blank=True, null=True, verbose_name="Date of Birth")
+    profile_image = models.TextField(blank=True, null=True, verbose_name="Profile Image (Base64)")
+    
     # StudentCount can be calculated dynamically, but if we need a field as per requirements:
     # We will rely on dynamic properties for logic, but can store it if really needed.
     # The requirement says "StudentCount" in the table. I'll add it but keep it updated?
