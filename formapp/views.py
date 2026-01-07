@@ -8,21 +8,27 @@ from .utils import allocate_staff, redistribute_work
 
 # --- Staff Authentication & Management ---
 
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
 @api_view(['POST'])
 def staff_login(request):
-    login_id = request.data.get('login_id')
-    password = request.data.get('password')
+    login_id = request.data.get('login_id', '').strip()
+    password = request.data.get('password', '').strip()
     
     try:
-        staff = Staff.objects.get(login_id=login_id)
+        # Case-insensitive lookup
+        staff = Staff.objects.get(login_id__iexact=login_id)
         if staff.check_password(password):
             if not staff.active_status:
                 return Response({"error": "Account is inactive"}, status=status.HTTP_403_FORBIDDEN)
             
-            # Simple tokenless auth: return user info and role
+            # Determine role
+            role = 'admin' if staff.login_id.lower() == 'admin' else 'staff'
+
             return Response({
                 "message": "Login successful",
-                "role": "staff", 
+                "role": role, 
                 "staff_id": staff.id,
                 "name": staff.name
             })
