@@ -8,6 +8,7 @@ class Staff(models.Model):
     login_id = models.CharField(max_length=50, unique=True, verbose_name="Login ID")
     password = models.CharField(max_length=255, verbose_name="Password")  # Stored as hash
     active_status = models.BooleanField(default=True, verbose_name="Active Status")
+    role = models.CharField(max_length=10, default='staff', verbose_name="Role")
     
     # Profile Fields
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")

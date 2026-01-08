@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import CollectionForm, Enquiry
+from .models import CollectionForm, Enquiry, Staff
+
+
+@admin.register(Staff)
+class StaffAdmin(admin.ModelAdmin):
+    list_display = ("name", "email", "login_id", "active_status", "created_at")
+    search_fields = ("name", "email", "login_id")
 
 
 @admin.register(CollectionForm)
