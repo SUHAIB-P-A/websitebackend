@@ -50,7 +50,7 @@ def staff_login(request):
 def staff_list(request):
     # Only Admin should access this
     if request.method == 'GET':
-        staff = Staff.objects.all().order_by('id')
+        staff = Staff.objects.filter(~Q(role='admin') & ~Q(login_id__iexact='admin')).order_by('id')
         serializer = StaffSerializer(staff, many=True)
         return Response(serializer.data)
     
