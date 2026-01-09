@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'formapp',
     'rest_framework',
     'corsheaders',
+    'notifications',
 ]
 
 MIDDLEWARE = [
