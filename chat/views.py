@@ -65,10 +65,11 @@ class MessageViewSet(viewsets.ModelViewSet):
                 is_read=False
             ).values('sender').annotate(count=Count('id')).values('count')
 
+            from django.db.models import F
             staffs = staffs.annotate(
                 last_message_time=Subquery(last_msg_qs, output_field=DateTimeField()),
                 unread_count=Coalesce(Subquery(unread_qs, output_field=IntegerField()), Value(0))
-            ).order_by('-last_message_time', 'name')
+            ).order_by(F('last_message_time').desc(nulls_last=True), 'name')
             
             data = staffs.values('id', 'name', 'role', 'login_id', 'profile_image', 'unread_count', 'last_message_time')
             return Response(data)
