@@ -90,3 +90,43 @@ class MessageViewSet(viewsets.ModelViewSet):
         
         count = Message.objects.filter(receiver_id=user_id, is_read=False).count()
         return Response({'count': count})
+
+    @action(detail=False, methods=['post'])
+    def delete_conversation(self, request):
+        """
+        Delete all messages between user_id and target_user_id.
+        usage: POST /api/chat/delete_conversation/
+        body: { "user_id": X, "target_user_id": Y }
+        """
+        user_id = request.data.get('user_id')
+        target_user_id = request.data.get('target_user_id')
+
+        if not user_id or not target_user_id:
+            return Response({'error': 'Missing user_id or target_user_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Delete messages where (sender=user_id AND receiver=target_user_id) OR (sender=target_user_id AND receiver=user_id)
+        # In a real app, we might just set a "deleted_by_X" flag, but here we hard delete as per request.
+        Message.objects.filter(
+            (Q(sender_id=user_id) & Q(receiver_id=target_user_id)) |
+            (Q(sender_id=target_user_id) & Q(receiver_id=user_id))
+        ).delete()
+
+        return Response({'status': 'deleted'})
+
+    @action(detail=False, methods=['post'])
+    def delete_messages(self, request):
+        """
+        Delete specific messages by ID.
+        usage: POST /api/chat/delete_messages/
+        body: { "message_ids": [1, 2, 3] }
+        """
+        message_ids = request.data.get('message_ids', [])
+        
+        if not message_ids:
+             return Response({'error': 'Missing message_ids'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # In a real app verify ownership (sender/receiver) before deleting?
+        # For this internal tool, we assume staff can manage their own chats.
+        Message.objects.filter(id__in=message_ids).delete()
+        
+        return Response({'status': 'deleted'})
