@@ -41,12 +41,51 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         Get list of users to chat with.
         Excludes the requester if 'exclude_id' param is provided.
+        Annotates with unread_count and last_message_time for sorting.
         """
-        exclude_id = request.query_params.get('exclude_id')
+        current_user_id = request.query_params.get('exclude_id')
         staffs = Staff.objects.filter(active_status=True)
-        if exclude_id:
-            staffs = staffs.exclude(id=exclude_id)
+        
+        if current_user_id:
+            staffs = staffs.exclude(id=current_user_id)
             
-        # We can reuse StaffSerializer or a simple one
+            # Subquery for last message time (sent or received)
+            from django.db.models import Subquery, OuterRef, Count, Max, Value, DateTimeField, IntegerField
+            from django.db.models.functions import Coalesce
+
+            last_msg_qs = Message.objects.filter(
+                (Q(sender_id=OuterRef('pk')) & Q(receiver_id=current_user_id)) |
+                (Q(sender_id=current_user_id) & Q(receiver_id=OuterRef('pk')))
+            ).order_by('-timestamp').values('timestamp')[:1]
+
+            # Subquery for unread count (messages sent BY the staff TO current user)
+            unread_qs = Message.objects.filter(
+                sender_id=OuterRef('pk'),
+                receiver_id=current_user_id,
+                is_read=False
+            ).values('sender').annotate(count=Count('id')).values('count')
+
+            staffs = staffs.annotate(
+                last_message_time=Subquery(last_msg_qs, output_field=DateTimeField()),
+                unread_count=Coalesce(Subquery(unread_qs, output_field=IntegerField()), Value(0))
+            ).order_by('-last_message_time', 'name')
+            
+            data = staffs.values('id', 'name', 'role', 'login_id', 'profile_image', 'unread_count', 'last_message_time')
+            return Response(data)
+
+        # Fallback if no exclude_id provided
         data = staffs.values('id', 'name', 'role', 'login_id', 'profile_image')
         return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def unread_count(self, request):
+        """
+        Get count of unread messages for a user.
+        usage: /api/chat/unread_count/?user_id=X
+        """
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+             return Response({'error': 'Missing user_id param'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        count = Message.objects.filter(receiver_id=user_id, is_read=False).count()
+        return Response({'count': count})
