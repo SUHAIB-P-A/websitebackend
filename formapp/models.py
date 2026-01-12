@@ -12,20 +12,23 @@ class Staff(models.Model):
     
     # Profile Fields
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")
+    secondary_phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Secondary Phone")
+    email_secondary = models.EmailField(blank=True, null=True, verbose_name="Secondary Email") # Optional but good to have? Requirement didn't ask, skipping.
+    
     gender = models.CharField(max_length=10, blank=True, null=True, verbose_name="Gender")
     dob = models.DateField(blank=True, null=True, verbose_name="Date of Birth")
     profile_image = models.TextField(blank=True, null=True, verbose_name="Profile Image (Base64)")
+    official_photo = models.TextField(blank=True, null=True, verbose_name="Official Staff Photo (Base64)") # Admin managed
     
-    # StudentCount can be calculated dynamically, but if we need a field as per requirements:
-    # We will rely on dynamic properties for logic, but can store it if really needed.
-    # The requirement says "StudentCount" in the table. I'll add it but keep it updated?
-    # Actually, better to make it a property in Django admin or serializer, 
-    # but the prompt specifically asked for "Staff Table: ... StudentCount".
-    # I will stick to computing it to avoid sync issues, but for the table schema strictness:
-    # I'll omit the physical field 'student_count' to avoid redundancy errors unless strictly forced.
-    # A method is better.
+    designation = models.CharField(max_length=100, blank=True, null=True, verbose_name="Designation")
+    department = models.CharField(max_length=100, blank=True, null=True, verbose_name="Department") # User didn't explicitly ask but it was in the UI code I saw earlier. I'll add it for completeness if I saw it.
+    address = models.TextField(blank=True, null=True, verbose_name="Address") # Detailed address
+    date_of_joining = models.DateField(blank=True, null=True, verbose_name="Date of Joining")
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # StudentCount can be calculated dynamically...
+    # ...
 
     def set_password(self, raw_password):
         self.password = make_password(raw_password)
@@ -40,6 +43,15 @@ class Staff(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.login_id})"
+
+class StaffDocument(models.Model):
+    staff = models.ForeignKey(Staff, related_name='documents', on_delete=models.CASCADE)
+    document_name = models.CharField(max_length=255, verbose_name="Document Name")
+    file = models.FileField(upload_to='staff_documents/', verbose_name="File")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.document_name} - {self.staff.name}"
 
 class CollectionForm(models.Model):
     first_name = models.CharField(

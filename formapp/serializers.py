@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CollectionForm, Enquiry, Staff
+from .models import CollectionForm, Enquiry, Staff, StaffDocument
 
 class StaffSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -7,7 +7,7 @@ class StaffSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Staff
-        fields = ['id', 'name', 'email', 'login_id', 'password', 'active_status', 'role', 'student_count', 'created_at', 'phone', 'gender', 'dob', 'profile_image']
+        fields = ['id', 'name', 'email', 'login_id', 'password', 'active_status', 'role', 'student_count', 'created_at', 'phone', 'gender', 'dob', 'profile_image', 'official_photo', 'secondary_phone', 'designation', 'department', 'address', 'date_of_joining']
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -21,6 +21,11 @@ class StaffSerializer(serializers.ModelSerializer):
             password = validated_data.pop('password')
             instance.set_password(password)
         return super().update(instance, validated_data)
+
+class StaffDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffDocument
+        fields = '__all__'
 
 class CollectionFormSerializer(serializers.ModelSerializer):
     assigned_staff_name = serializers.ReadOnlyField(source='assigned_staff.name')

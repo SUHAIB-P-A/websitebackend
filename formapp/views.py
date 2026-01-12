@@ -2,11 +2,38 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 from django.db.models import Q
-from .models import CollectionForm, Staff, Enquiry
-from .serializers import CollectionFormSerializer, StaffSerializer, EnquirySerializer
+# ... (existing imports, add ModelViewSet)
+from rest_framework import viewsets
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import CollectionForm, Staff, Enquiry, StaffDocument
+from .serializers import CollectionFormSerializer, StaffSerializer, EnquirySerializer, StaffDocumentSerializer
 from .utils import allocate_staff, redistribute_work
 
 # --- Staff Authentication & Management ---
+
+# ... (existing code up to staff_detail)
+
+class StaffDocumentViewSet(viewsets.ModelViewSet):
+    """
+    Handles Staff Document uploads and listing.
+    Filter by ?staff_id=X
+    """
+    queryset = StaffDocument.objects.all()
+    serializer_class = StaffDocumentSerializer
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        staff_id = self.request.query_params.get('staff_id')
+        if staff_id:
+            qs = qs.filter(staff_id=staff_id)
+        return qs.order_by('-created_at')
+    
+    def create(self, request, *args, **kwargs):
+        # Allow passing staff_id manually if needed, but usually it's in the form data
+        return super().create(request, *args, **kwargs)
+
+# --- Students / Collection Forms ---
 
 from django.views.decorators.csrf import csrf_exempt
 
@@ -62,7 +89,7 @@ def staff_list(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
-@api_view(['GET', 'PUT', 'DELETE'])
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def staff_detail(request, pk):
     try:
         staff = Staff.objects.get(pk=pk)
@@ -73,7 +100,7 @@ def staff_detail(request, pk):
         serializer = StaffSerializer(staff)
         return Response(serializer.data)
 
-    elif request.method == 'PUT':
+    elif request.method in ['PUT', 'PATCH']:
         serializer = StaffSerializer(staff, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
