@@ -28,9 +28,12 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not u1 or not u2:
             return Response({'error': 'Missing user1 or user2 params'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Logic: Messages where (Sender is U1 AND not deleted by sender) OR (Receiver is U1 AND not deleted by receiver)
+        # We assume U1 is the viewer.
+        
         msgs = Message.objects.filter(
-            (Q(sender_id=u1) & Q(receiver_id=u2)) |
-            (Q(sender_id=u2) & Q(receiver_id=u1))
+            (Q(sender_id=u1) & Q(receiver_id=u2) & Q(deleted_by_sender=False)) |
+            (Q(sender_id=u2) & Q(receiver_id=u1) & Q(deleted_by_receiver=False))
         ).order_by('timestamp')
         
         serializer = self.get_serializer(msgs, many=True)
@@ -50,19 +53,22 @@ class MessageViewSet(viewsets.ModelViewSet):
             staffs = staffs.exclude(id=current_user_id)
             
             # Subquery for last message time (sent or received)
+            # Must exclude if deleted by current user
             from django.db.models import Subquery, OuterRef, Count, Max, Value, DateTimeField, IntegerField
             from django.db.models.functions import Coalesce
 
             last_msg_qs = Message.objects.filter(
-                (Q(sender_id=OuterRef('pk')) & Q(receiver_id=current_user_id)) |
-                (Q(sender_id=current_user_id) & Q(receiver_id=OuterRef('pk')))
+                (Q(sender_id=OuterRef('pk')) & Q(receiver_id=current_user_id) & Q(deleted_by_receiver=False)) |
+                (Q(sender_id=current_user_id) & Q(receiver_id=OuterRef('pk')) & Q(deleted_by_sender=False))
             ).order_by('-timestamp').values('timestamp')[:1]
 
             # Subquery for unread count (messages sent BY the staff TO current user)
+            # Must exclude if deleted by current user (receiver)
             unread_qs = Message.objects.filter(
                 sender_id=OuterRef('pk'),
                 receiver_id=current_user_id,
-                is_read=False
+                is_read=False,
+                deleted_by_receiver=False
             ).values('sender').annotate(count=Count('id')).values('count')
 
             from django.db.models import F
@@ -88,45 +94,64 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not user_id:
              return Response({'error': 'Missing user_id param'}, status=status.HTTP_400_BAD_REQUEST)
         
-        count = Message.objects.filter(receiver_id=user_id, is_read=False).count()
+        count = Message.objects.filter(receiver_id=user_id, is_read=False, deleted_by_receiver=False).count()
         return Response({'count': count})
 
     @action(detail=False, methods=['post'])
     def delete_conversation(self, request):
         """
-        Delete all messages between user_id and target_user_id.
+        Delete messages between user_id and target_user_id.
         usage: POST /api/chat/delete_conversation/
         body: { "user_id": X, "target_user_id": Y }
         """
         user_id = request.data.get('user_id')
         target_user_id = request.data.get('target_user_id')
+        # mode param is ignored; strictly enforced local delete.
 
         if not user_id or not target_user_id:
             return Response({'error': 'Missing user_id or target_user_id'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Delete messages where (sender=user_id AND receiver=target_user_id) OR (sender=target_user_id AND receiver=user_id)
-        # In a real app, we might just set a "deleted_by_X" flag, but here we hard delete as per request.
+        # Soft delete (Local) - Only clear for the requesting user
+        # Update messages sent by user
         Message.objects.filter(
-            (Q(sender_id=user_id) & Q(receiver_id=target_user_id)) |
-            (Q(sender_id=target_user_id) & Q(receiver_id=user_id))
-        ).delete()
+            sender_id=user_id,
+            receiver_id=target_user_id
+        ).update(deleted_by_sender=True)
+        
+        # Update messages received by user
+        Message.objects.filter(
+            sender_id=target_user_id,
+            receiver_id=user_id
+        ).update(deleted_by_receiver=True)
 
-        return Response({'status': 'deleted'})
+        return Response({'status': 'deleted', 'mode': 'local'})
 
     @action(detail=False, methods=['post'])
     def delete_messages(self, request):
         """
         Delete specific messages by ID.
         usage: POST /api/chat/delete_messages/
-        body: { "message_ids": [1, 2, 3] }
+        body: { "message_ids": [1, 2, 3], "user_id": X }
         """
         message_ids = request.data.get('message_ids', [])
+        user_id = request.data.get('user_id')
+        # mode param is ignored; strictly enforced local delete.
         
         if not message_ids:
              return Response({'error': 'Missing message_ids'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # In a real app verify ownership (sender/receiver) before deleting?
-        # For this internal tool, we assume staff can manage their own chats.
-        Message.objects.filter(id__in=message_ids).delete()
+        msgs = Message.objects.filter(id__in=message_ids)
         
-        return Response({'status': 'deleted'})
+        # Soft delete (local)
+        if user_id:
+            # Update messages where I am sender:
+            msgs.filter(sender_id=user_id).update(deleted_by_sender=True)
+            # Update messages where I am receiver:
+            msgs.filter(receiver_id=user_id).update(deleted_by_receiver=True)
+        else:
+             # Fallback to request.user if available (though likely anonymous)
+             if request.user.is_authenticated:
+                msgs.filter(sender=request.user).update(deleted_by_sender=True)
+                msgs.filter(receiver=request.user).update(deleted_by_receiver=True)
+            
+        return Response({'status': 'success'})
