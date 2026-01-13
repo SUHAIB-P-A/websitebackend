@@ -47,8 +47,9 @@ def staff_login(request):
         # Case-insensitive lookup
         staff = Staff.objects.get(login_id__iexact=login_id)
         if staff.check_password(password):
-            if not staff.active_status:
-                return Response({"error": "Account is inactive"}, status=status.HTTP_403_FORBIDDEN)
+            # We allow login even if active_status is False (Offline for leads)
+            # if not staff.active_status:
+            #     return Response({"error": "Account is inactive"}, status=status.HTTP_403_FORBIDDEN)
             
             # Determine role
             role = 'admin' if staff.login_id.lower() == 'admin' else 'staff'

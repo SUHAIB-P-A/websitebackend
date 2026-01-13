@@ -6,7 +6,7 @@ def allocate_staff(instance):
     Assigns the instance (Student or Enquiry) to the staff member with the lowest workload.
     Workload = count(assigned_students) + count(assigned_enquiries)
     """
-    active_staff = Staff.objects.filter(active_status=True)
+    active_staff = Staff.objects.filter(active_status=True, role='staff')
     
     if not active_staff.exists():
         return None
