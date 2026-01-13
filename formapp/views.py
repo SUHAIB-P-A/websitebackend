@@ -283,11 +283,8 @@ def reallocate_leads(request):
         # Let's return NO results to be safe if criteria is weird.
         return Response({"error": "Invalid criteria"}, status=status.HTTP_400_BAD_REQUEST)
     
-    # Fetch Leads
-    leads = Model.objects.filter(query).order_by('created_at')[:count]
-    
-    updated_count = 0
-    ids_to_update = [lead.id for lead in leads]
+    # Fetch Leads (IDs only for optimization)
+    ids_to_update = list(Model.objects.filter(query).order_by('created_at').values_list('id', flat=True)[:count])
     
     if ids_to_update:
         updated_count = Model.objects.filter(id__in=ids_to_update).update(assigned_staff=target_staff)
