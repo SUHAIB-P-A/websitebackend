@@ -148,7 +148,7 @@ def submit_form(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET', 'PUT', 'DELETE'])
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def submit_detail(request, pk):
     try:
         student = CollectionForm.objects.get(pk=pk)
@@ -161,8 +161,9 @@ def submit_detail(request, pk):
         serializer = CollectionFormSerializer(student)
         return Response(serializer.data)
 
-    elif request.method == 'PUT':
-        serializer = CollectionFormSerializer(student, data=request.data)
+    elif request.method in ['PUT', 'PATCH']:
+        partial = request.method == 'PATCH'
+        serializer = CollectionFormSerializer(student, data=request.data, partial=partial)
         if serializer.is_valid():
             instance = serializer.save()
             
@@ -233,3 +234,65 @@ def enquiry_detail(request, pk):
     elif request.method == 'DELETE':
         enquiry.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+@csrf_exempt
+@api_view(['POST'])
+def reallocate_leads(request):
+    """
+    Reallocates leads from one staff to another based on criteria.
+    Inputs:
+        source_staff_id: int or 'all'
+        target_staff_id: int
+        criteria: 'unread', 'pending', 'all'
+        count: int (optional, default 50)
+        type: 'student', 'enquiry'
+    """
+    source_id = request.data.get('source_staff_id')
+    target_id = request.data.get('target_staff_id')
+    criteria = request.data.get('criteria', 'unread').lower().strip()
+    count = int(request.data.get('count', 50))
+    lead_type = request.data.get('type', 'student')
+
+    if not target_id:
+        return Response({"error": "Target staff is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate IDs
+    try:
+        target_staff = Staff.objects.get(pk=target_id)
+        if str(source_id) != 'all' and source_id:
+            Staff.objects.get(pk=source_id) # Check existence
+    except Staff.DoesNotExist:
+        return Response({"error": "Staff not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Select Model
+    Model = CollectionForm if lead_type == 'student' else Enquiry
+
+    # Build Query
+    query = Q()
+    if str(source_id) != 'all':
+        query &= Q(assigned_staff_id=source_id)
+    
+    if criteria == 'unread':
+        query &= Q(is_read=False) & Q(status='Pending')
+    elif criteria == 'pending':
+        query &= Q(status='Pending')
+    elif criteria == 'all':
+        pass # Explicitly allow all
+    else:
+        # Unknown criteria? Default to Unread logic for safety, or return empty?
+        # Let's return NO results to be safe if criteria is weird.
+        return Response({"error": "Invalid criteria"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Fetch Leads
+    leads = Model.objects.filter(query).order_by('created_at')[:count]
+    
+    updated_count = 0
+    ids_to_update = [lead.id for lead in leads]
+    
+    if ids_to_update:
+        updated_count = Model.objects.filter(id__in=ids_to_update).update(assigned_staff=target_staff)
+
+    return Response({
+        "message": f"Successfully reallocated {updated_count} {lead_type}s to {target_staff.name}",
+        "count": updated_count
+    })
