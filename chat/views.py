@@ -135,23 +135,32 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         message_ids = request.data.get('message_ids', [])
         user_id = request.data.get('user_id')
-        # mode param is ignored; strictly enforced local delete.
+        mode = request.data.get('mode', 'local')
         
         if not message_ids:
              return Response({'error': 'Missing message_ids'}, status=status.HTTP_400_BAD_REQUEST)
 
         msgs = Message.objects.filter(id__in=message_ids)
         
-        # Soft delete (local)
         if user_id:
-            # Update messages where I am sender:
-            msgs.filter(sender_id=user_id).update(deleted_by_sender=True)
-            # Update messages where I am receiver:
-            msgs.filter(receiver_id=user_id).update(deleted_by_receiver=True)
+            if mode == 'everyone':
+                # Delete for everyone: Only applicable to messages SENT by this user.
+                # Mark as revoked (content replaced), but keep visible in query so text can be shown.
+                msgs.filter(sender_id=user_id).update(is_revoked=True)
+                
+                # IMPORTANT: Do NOT set deleted_by_sender/receiver for 'everyone' mode, 
+                # because we want to show "You deleted this message" / "This message was deleted"
+            else:
+                # Local delete
+                msgs.filter(sender_id=user_id).update(deleted_by_sender=True)
+                msgs.filter(receiver_id=user_id).update(deleted_by_receiver=True)
         else:
-             # Fallback to request.user if available (though likely anonymous)
+             # Fallback to request.user if available (though likely anonymous or staff via session)
              if request.user.is_authenticated:
-                msgs.filter(sender=request.user).update(deleted_by_sender=True)
-                msgs.filter(receiver=request.user).update(deleted_by_receiver=True)
+                if mode == 'everyone':
+                    msgs.filter(sender=request.user).update(is_revoked=True)
+                else:
+                    msgs.filter(sender=request.user).update(deleted_by_sender=True)
+                    msgs.filter(receiver=request.user).update(deleted_by_receiver=True)
             
         return Response({'status': 'success'})

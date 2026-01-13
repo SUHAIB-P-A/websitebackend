@@ -14,6 +14,7 @@ class Message(models.Model):
 
     deleted_by_sender = models.BooleanField(default=False)
     deleted_by_receiver = models.BooleanField(default=False)
+    is_revoked = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['timestamp']
