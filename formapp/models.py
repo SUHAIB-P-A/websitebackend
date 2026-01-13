@@ -144,6 +144,12 @@ class CollectionForm(models.Model):
         verbose_name="City"
     )
 
+    follow_up_date = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Follow Up Date"
+    )
+
 
 
     course_selected = models.CharField(
@@ -165,6 +171,12 @@ class CollectionForm(models.Model):
         verbose_name="Extra Data"
     )
 
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Notes"
+    )
+
     assigned_staff = models.ForeignKey(
         Staff,
         on_delete=models.SET_NULL,
@@ -183,6 +195,7 @@ class CollectionForm(models.Model):
         ('Pending', 'Pending'),
         ('In Progress', 'In Progress'),
         ('Completed', 'Completed'),
+        ('Follow Up', 'Follow Up'),
     ]
     status = models.CharField(
         max_length=20,
@@ -257,12 +270,19 @@ class Enquiry(models.Model):
     STATUS_CHOICES = [
         ('Pending', 'Pending'),
         ('Connected', 'Connected'),
+        ('Follow Up', 'Follow Up'),
     ]
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='Pending',
         verbose_name="Status"
+    )
+
+    follow_up_date = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Follow Up Date"
     )
 
     is_read = models.BooleanField(

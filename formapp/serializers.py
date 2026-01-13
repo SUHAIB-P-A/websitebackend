@@ -71,6 +71,12 @@ class CollectionFormSerializer(serializers.ModelSerializer):
             ret.update(extra_data)
         return ret
 
+    def validate(self, attrs):
+        # If status is being updated and is NOT 'Follow Up', clear the date
+        if 'status' in attrs and attrs['status'] != 'Follow Up':
+            attrs['follow_up_date'] = None
+        return attrs
+
 
 class EnquirySerializer(serializers.ModelSerializer):
     assigned_staff_name = serializers.ReadOnlyField(source='assigned_staff.name')
@@ -78,3 +84,9 @@ class EnquirySerializer(serializers.ModelSerializer):
     class Meta:
         model = Enquiry
         fields = '__all__'
+
+    def validate(self, attrs):
+        # If status is being updated and is NOT 'Follow Up', clear the date
+        if 'status' in attrs and attrs['status'] != 'Follow Up':
+            attrs['follow_up_date'] = None
+        return attrs
