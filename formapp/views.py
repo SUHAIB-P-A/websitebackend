@@ -293,3 +293,40 @@ def reallocate_leads(request):
         "message": f"Successfully reallocated {updated_count} {lead_type}s to {target_staff.name}",
         "count": updated_count
     })
+
+
+@api_view(['GET'])
+def dashboard_stats(request):
+    """
+    Returns aggregated statistics for the dashboard.
+    Support filtering by staff_id for robust role-based data.
+    """
+    staff_id = request.headers.get('X-Staff-ID') or request.GET.get('staff_id')
+    role = request.GET.get('role', 'staff') # 'admin' or 'staff'
+    
+    # Base QuerySets
+    enq_qs = Enquiry.objects.all()
+    form_qs = CollectionForm.objects.all()
+    
+    # Appply Filters for Non-Admin
+    if role.lower() != 'admin' and staff_id and staff_id != 'null':
+        enq_qs = enq_qs.filter(assigned_staff_id=staff_id)
+        form_qs = form_qs.filter(assigned_staff_id=staff_id)
+
+    # Calculate Stats
+    stats = {
+        'total_enquiries': enq_qs.count(),
+        'pending_enquiries': enq_qs.filter(is_read=False).count(),
+        'total_students': form_qs.count(),
+        'pending_students': form_qs.filter(is_read=False).count(),
+    }
+
+    # Fetch Recent Activity (Limit 5)
+    recent_enquiries = EnquirySerializer(enq_qs.order_by('-created_at')[:5], many=True).data
+    recent_students = CollectionFormSerializer(form_qs.order_by('-created_at')[:5], many=True).data
+
+    return Response({
+        'stats': stats,
+        'recent_enquiries': recent_enquiries,
+        'recent_students': recent_students
+    })

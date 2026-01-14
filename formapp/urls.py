@@ -16,4 +16,5 @@ urlpatterns = [
     path('staff/', staff_list),
     path('staff/<int:pk>/', staff_detail),
     path('staff/reallocate/', views.reallocate_leads),
+    path('dashboard/', views.dashboard_stats),
 ]
