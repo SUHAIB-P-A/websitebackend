@@ -2,6 +2,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 from django.db.models import Q
+from django.utils import timezone
 # ... (existing imports, add ModelViewSet)
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -165,7 +166,11 @@ def submit_detail(request, pk):
         partial = request.method == 'PATCH'
         serializer = CollectionFormSerializer(student, data=request.data, partial=partial)
         if serializer.is_valid():
-            instance = serializer.save()
+            # Set viewed_at if not set and is_read is True
+            if serializer.validated_data.get('is_read') and not student.viewed_at:
+                 instance = serializer.save(viewed_at=timezone.now())
+            else:
+                 instance = serializer.save()
             
             # Check for explicit Auto Allocation request
             if request.data.get('auto_allocate'):
@@ -220,7 +225,11 @@ def enquiry_detail(request, pk):
     elif request.method == 'PUT':
         serializer = EnquirySerializer(enquiry, data=request.data)
         if serializer.is_valid():
-            instance = serializer.save()
+            # Set viewed_at if not set and is_read is True
+            if serializer.validated_data.get('is_read') and not enquiry.viewed_at:
+                 instance = serializer.save(viewed_at=timezone.now())
+            else:
+                 instance = serializer.save()
             
             # Check for explicit Auto Allocation request
             if request.data.get('auto_allocate'):

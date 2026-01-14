@@ -208,6 +208,12 @@ class CollectionForm(models.Model):
         verbose_name="Is Read"
     )
 
+    viewed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Viewed At"
+    )
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -287,6 +293,12 @@ class Enquiry(models.Model):
     is_read = models.BooleanField(
         default=False,
         verbose_name="Is Read"
+    )
+
+    viewed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Viewed At"
     )
 
 
