@@ -65,7 +65,6 @@ class CollectionForm(models.Model):
     )
 
     email = models.EmailField(
-        unique=True,
         verbose_name="Email Address"
     )
 

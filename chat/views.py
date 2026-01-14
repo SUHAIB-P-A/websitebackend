@@ -77,11 +77,26 @@ class MessageViewSet(viewsets.ModelViewSet):
                 unread_count=Coalesce(Subquery(unread_qs, output_field=IntegerField()), Value(0))
             ).order_by(F('last_message_time').desc(nulls_last=True), 'name')
             
-            data = staffs.values('id', 'name', 'role', 'login_id', 'profile_image', 'unread_count', 'last_message_time')
+            # Check if this is a polling request (lightweight)
+            is_polling = request.query_params.get('polling') == 'true'
+            
+            fields_to_fetch = ['id', 'name', 'role', 'login_id', 'unread_count', 'last_message_time']
+            if not is_polling:
+                fields_to_fetch.append('profile_image')
+
+            data = staffs.values(*fields_to_fetch)
             return Response(data)
 
         # Fallback if no exclude_id provided
-        data = staffs.values('id', 'name', 'role', 'login_id', 'profile_image')
+        # Check if this is a polling request (lightweight)
+        is_polling = request.query_params.get('polling') == 'true'
+        
+        fields_to_fetch = ['id', 'name', 'role', 'login_id']
+        if not is_polling:
+            fields_to_fetch.append('profile_image')
+
+        # Fallback if no exclude_id provided
+        data = staffs.values(*fields_to_fetch)
         return Response(data)
 
     @action(detail=False, methods=['get'])
