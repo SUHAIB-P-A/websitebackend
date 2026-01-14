@@ -1,20 +1,46 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Message
-from .serializers import MessageSerializer
+from .mongo_client import save_message, get_conversation, get_last_message, get_unread_count, mark_as_read, delete_conversation_local, delete_messages as delete_messages_mongo
 from formapp.models import Staff
-from django.db.models import Q
-from formapp.serializers import StaffSerializer 
+from formapp.serializers import StaffSerializer
+import datetime 
 
-class MessageViewSet(viewsets.ModelViewSet):
-    serializer_class = MessageSerializer
+class MessageViewSet(viewsets.ViewSet):
+    """
+    A simplified ViewSet for Chat Messages backed by MongoDB.
+    No longer inherits ModelViewSet because we aren't using Django ORM for messages.
+    """
 
-    def get_queryset(self):
-        # By default, return messages where current user is involved
-        # For security, we should filter by request.user or similar if we have auth.
-        # Here we rely on query params or custom actions.
-        return Message.objects.all()
+    def create(self, request):
+        """
+        Send a message.
+        POST /api/chat/
+        Body: { sender: X, receiver: Y, content: "..." } OR { sender_id: X, receiver_id: Y, content: "..." }
+        """
+        data = request.data
+        
+        # Normalize field names - accept both 'sender' and 'sender_id'
+        normalized_data = {
+            'sender_id': data.get('sender_id') or data.get('sender'),
+            'receiver_id': data.get('receiver_id') or data.get('receiver'),
+            'content': data.get('content')
+        }
+        
+        if not all(normalized_data.values()):
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify users exist in SQL
+        if not Staff.objects.filter(id=normalized_data['sender_id']).exists():
+             return Response({'error': 'Invalid sender_id'}, status=status.HTTP_400_BAD_REQUEST)
+        if not Staff.objects.filter(id=normalized_data['receiver_id']).exists():
+             return Response({'error': 'Invalid receiver_id'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            msg = save_message(normalized_data)
+            return Response(msg, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
     def conversation(self, request):
@@ -28,126 +54,112 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not u1 or not u2:
             return Response({'error': 'Missing user1 or user2 params'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Logic: Messages where (Sender is U1 AND not deleted by sender) OR (Receiver is U1 AND not deleted by receiver)
-        # We assume U1 is the viewer.
+        msgs = get_conversation(u1, u2)
         
-        msgs = Message.objects.filter(
-            (Q(sender_id=u1) & Q(receiver_id=u2) & Q(deleted_by_sender=False)) |
-            (Q(sender_id=u2) & Q(receiver_id=u1) & Q(deleted_by_receiver=False))
-        ).order_by('timestamp')
+        # Mark messages from u2 as read by u1 (assuming u1 is the requester)
+        # In a real app we'd verify request.user
+        mark_as_read(sender_id=u2, receiver_id=u1)
         
-        serializer = self.get_serializer(msgs, many=True)
-        return Response(serializer.data)
+        return Response(msgs)
 
     @action(detail=False, methods=['get'])
     def users(self, request):
         """
-        Get list of users to chat with.
-        Excludes the requester if 'exclude_id' param is provided.
-        Annotates with unread_count and last_message_time for sorting.
+        Get list of users to chat with, annotated with stats from Mongo.
+        usage: /api/chat/users/?exclude_id=X
         """
         current_user_id = request.query_params.get('exclude_id')
         staffs = Staff.objects.filter(active_status=True)
         
         if current_user_id:
-            staffs = staffs.exclude(id=current_user_id)
+            try:
+                current_user_id = int(current_user_id)
+                staffs = staffs.exclude(id=current_user_id)
+            except ValueError:
+                pass # safely ignore invalid id
             
-            # Subquery for last message time (sent or received)
-            # Must exclude if deleted by current user
-            from django.db.models import Subquery, OuterRef, Count, Max, Value, DateTimeField, IntegerField
-            from django.db.models.functions import Coalesce
-
-            last_msg_qs = Message.objects.filter(
-                (Q(sender_id=OuterRef('pk')) & Q(receiver_id=current_user_id) & Q(deleted_by_receiver=False)) |
-                (Q(sender_id=current_user_id) & Q(receiver_id=OuterRef('pk')) & Q(deleted_by_sender=False))
-            ).order_by('-timestamp').values('timestamp')[:1]
-
-            # Subquery for unread count (messages sent BY the staff TO current user)
-            # Must exclude if deleted by current user (receiver)
-            unread_qs = Message.objects.filter(
-                sender_id=OuterRef('pk'),
-                receiver_id=current_user_id,
-                is_read=False,
-                deleted_by_receiver=False
-            ).values('sender').annotate(count=Count('id')).values('count')
-
-            from django.db.models import F
-            staffs = staffs.annotate(
-                last_message_time=Subquery(last_msg_qs, output_field=DateTimeField()),
-                unread_count=Coalesce(Subquery(unread_qs, output_field=IntegerField()), Value(0))
-            ).order_by(F('last_message_time').desc(nulls_last=True), 'name')
-            
-            # Check if this is a polling request (lightweight)
-            is_polling = request.query_params.get('polling') == 'true'
-            
-            fields_to_fetch = ['id', 'name', 'role', 'login_id', 'unread_count', 'last_message_time']
-            if not is_polling:
-                fields_to_fetch.append('profile_image')
-
-            data = staffs.values(*fields_to_fetch)
-            return Response(data)
-
-        # Fallback if no exclude_id provided
-        # Check if this is a polling request (lightweight)
+        # Optimization: Fetch basic fields
         is_polling = request.query_params.get('polling') == 'true'
-        
         fields_to_fetch = ['id', 'name', 'role', 'login_id']
         if not is_polling:
             fields_to_fetch.append('profile_image')
-
-        # Fallback if no exclude_id provided
-        data = staffs.values(*fields_to_fetch)
-        return Response(data)
+            
+        staff_data = list(staffs.values(*fields_to_fetch))
+        
+        if current_user_id:
+            # Annotate with data from Mongo
+            for s in staff_data:
+                other_id = s['id']
+                # Unread count (Messages SENT by other_id TO current_user_id)
+                s['unread_count'] = get_unread_count(sender_id=other_id, receiver_id=current_user_id)
+                
+                # Last message time
+                s['last_message_time'] = get_last_message(current_user_id, other_id)
+            
+            
+            # Sort by last_message_time desc
+            # Handle both timezone-aware and naive datetimes
+            def sort_key(user):
+                ts = user.get('last_message_time')
+                if ts is None:
+                    # Return a very old date for users with no messages
+                    return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+                # If timestamp is already a datetime object, ensure it's timezone-aware
+                if isinstance(ts, datetime.datetime):
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=datetime.timezone.utc)
+                    return ts
+                # If it's a string (from ISO format), parse it
+                if isinstance(ts, str):
+                    try:
+                        return datetime.datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    except:
+                        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+                return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+            
+            staff_data.sort(key=sort_key, reverse=True)
+            
+        return Response(staff_data)
 
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
         """
-        Get count of unread messages for a user.
+        Get total unread count for a user (across all conversations? Or specific?)
+        The old API seemed to imply total unread messages for detailed view.
         usage: /api/chat/unread_count/?user_id=X
         """
         user_id = request.query_params.get('user_id')
         if not user_id:
              return Response({'error': 'Missing user_id param'}, status=status.HTTP_400_BAD_REQUEST)
         
-        count = Message.objects.filter(receiver_id=user_id, is_read=False, deleted_by_receiver=False).count()
-        return Response({'count': count})
+        # We can sum up all unread messages for this receiver
+        # Implementation in mongo_client needed if we want TOTAL unread.
+        # For now, let's reuse the per-sender logic if the frontend iterates, 
+        # OR just return a sum if we modify mongo_client.
+        # Let's assume the frontend asks for specific or we add a 'total_unread' helper.
+        
+        # Quick fix: Count any unread message where receiver_id == user_id
+        from .mongo_client import messages_collection
+        total = messages_collection.count_documents({
+            'receiver_id': int(user_id), 
+            'is_read': False, 
+            'deleted_by_receiver': False
+        })
+        return Response({'count': total})
 
     @action(detail=False, methods=['post'])
     def delete_conversation(self, request):
-        """
-        Delete messages between user_id and target_user_id.
-        usage: POST /api/chat/delete_conversation/
-        body: { "user_id": X, "target_user_id": Y }
-        """
         user_id = request.data.get('user_id')
         target_user_id = request.data.get('target_user_id')
-        # mode param is ignored; strictly enforced local delete.
 
         if not user_id or not target_user_id:
             return Response({'error': 'Missing user_id or target_user_id'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Soft delete (Local) - Only clear for the requesting user
-        # Update messages sent by user
-        Message.objects.filter(
-            sender_id=user_id,
-            receiver_id=target_user_id
-        ).update(deleted_by_sender=True)
-        
-        # Update messages received by user
-        Message.objects.filter(
-            sender_id=target_user_id,
-            receiver_id=user_id
-        ).update(deleted_by_receiver=True)
-
+        delete_conversation_local(user_id, target_user_id)
         return Response({'status': 'deleted', 'mode': 'local'})
 
     @action(detail=False, methods=['post'])
     def delete_messages(self, request):
-        """
-        Delete specific messages by ID.
-        usage: POST /api/chat/delete_messages/
-        body: { "message_ids": [1, 2, 3], "user_id": X }
-        """
         message_ids = request.data.get('message_ids', [])
         user_id = request.data.get('user_id')
         mode = request.data.get('mode', 'local')
@@ -155,27 +167,6 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not message_ids:
              return Response({'error': 'Missing message_ids'}, status=status.HTTP_400_BAD_REQUEST)
 
-        msgs = Message.objects.filter(id__in=message_ids)
-        
-        if user_id:
-            if mode == 'everyone':
-                # Delete for everyone: Only applicable to messages SENT by this user.
-                # Mark as revoked (content replaced), but keep visible in query so text can be shown.
-                msgs.filter(sender_id=user_id).update(is_revoked=True)
-                
-                # IMPORTANT: Do NOT set deleted_by_sender/receiver for 'everyone' mode, 
-                # because we want to show "You deleted this message" / "This message was deleted"
-            else:
-                # Local delete
-                msgs.filter(sender_id=user_id).update(deleted_by_sender=True)
-                msgs.filter(receiver_id=user_id).update(deleted_by_receiver=True)
-        else:
-             # Fallback to request.user if available (though likely anonymous or staff via session)
-             if request.user.is_authenticated:
-                if mode == 'everyone':
-                    msgs.filter(sender=request.user).update(is_revoked=True)
-                else:
-                    msgs.filter(sender=request.user).update(deleted_by_sender=True)
-                    msgs.filter(receiver=request.user).update(deleted_by_receiver=True)
-            
+        delete_messages_mongo(message_ids, user_id, mode)
         return Response({'status': 'success'})
+

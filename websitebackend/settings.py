@@ -134,3 +134,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# MongoDB Configuration
+MONGO_URI = (
+    "mongodb+srv://laren:%40password123@"
+    "somerandommongodbdatabase.global.mongocluster.cosmos.azure.com/"
+    "?tls=true&authMechanism=SCRAM-SHA-256"
+    "&retrywrites=false&maxIdleTimeMS=120000"
+)
+MONGO_DB_NAME = "chat_db"
