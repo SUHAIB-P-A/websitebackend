@@ -110,10 +110,43 @@ def staff_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
+        import os
+        from django.conf import settings
+        
+        # Collect deletion summary before deleting
+        student_count = staff.assigned_students.count()
+        enquiry_count = staff.assigned_enquiries.count()
+        document_count = staff.documents.count()
+        
+        # Get document file paths for cleanup
+        document_files = list(staff.documents.values_list('file', flat=True))
+        
         # Redistribute work before deleting
         redistribute_work(staff.id)
+        
+        # Delete staff (CASCADE will delete StaffDocument records)
         staff.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        # Clean up actual files from filesystem
+        deleted_files = 0
+        for file_path in document_files:
+            try:
+                full_path = os.path.join(settings.MEDIA_ROOT, str(file_path))
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                    deleted_files += 1
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
+        
+        return Response({
+            "message": "Staff deleted successfully",
+            "details": {
+                "students_reassigned": student_count,
+                "enquiries_reassigned": enquiry_count,
+                "documents_deleted": document_count,
+                "files_cleaned": deleted_files
+            }
+        }, status=status.HTTP_200_OK)
 
 
 # --- Students / Collection Forms ---
