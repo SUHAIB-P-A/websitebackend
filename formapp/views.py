@@ -70,9 +70,6 @@ def staff_login(request):
         else:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
     except Staff.DoesNotExist:
-        # Check if it's a hardcoded admin for bootstrapping?
-        if login_id == 'admin' and password == 'admin123': # TEMPORARY BOOTSTRAP
-             return Response({"message": "Admin Login", "role": "admin", "staff_id": None})
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 @api_view(['GET', 'POST'])

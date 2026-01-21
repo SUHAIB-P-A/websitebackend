@@ -8,13 +8,16 @@ router.register(r'staff-documents', views.StaffDocumentViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Specific paths BEFORE generic <pk> paths to avoid pattern conflicts
     path('submit/', submit_form),
     path('submit/<int:pk>/', submit_detail),
     path('enquiries/', views.enquiry_list),
     path('enquiries/<int:pk>/', views.enquiry_detail),
     path('staff-login/', staff_login),
-    path('staff/', staff_list),
-    path('staff/<int:pk>/', staff_detail),
+    # Specific staff endpoints
     path('staff/reallocate/', views.reallocate_leads),
     path('dashboard/', views.dashboard_stats),
+    # Generic staff endpoints (AFTER specific routes)
+    path('staff/', staff_list),
+    path('staff/<int:pk>/', staff_detail),
 ]

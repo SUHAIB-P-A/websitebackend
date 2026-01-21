@@ -219,6 +219,9 @@ class CollectionForm(models.Model):
         indexes = [
             models.Index(fields=['email']),
             models.Index(fields=['phone_number']),
+            models.Index(fields=['assigned_staff']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_read', 'status']),  # Composite for common filters
         ]
         verbose_name = "Collection Form Entry"
         verbose_name_plural = "Collection Form Entries"
@@ -310,6 +313,12 @@ class Enquiry(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['phone']),
+            models.Index(fields=['assigned_staff']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_read', 'status']),  # Composite for common filters
+        ]
         verbose_name = "Enquiry"
         verbose_name_plural = "Enquiries"
 
