@@ -54,18 +54,15 @@ class StaffDocument(models.Model):
         return f"{self.document_name} - {self.staff.name}"
 
 class CollectionForm(models.Model):
-    first_name = models.CharField(
-        max_length=100,
-        verbose_name="First Name"
-    )
-
-    last_name = models.CharField(
-        max_length=100,
-        verbose_name="Last Name"
+    full_name = models.CharField(
+        max_length=200,
+        verbose_name="Full Name"
     )
 
     email = models.EmailField(
-        verbose_name="Email Address"
+        verbose_name="Email Address",
+        null=True,
+        blank=True
     )
 
     phone_number = models.CharField(
@@ -227,7 +224,7 @@ class CollectionForm(models.Model):
         verbose_name_plural = "Collection Form Entries"
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.email})"
+        return f"{self.full_name} ({self.email or self.phone_number})"
 
 
 class Enquiry(models.Model):

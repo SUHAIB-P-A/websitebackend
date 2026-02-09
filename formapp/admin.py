@@ -11,8 +11,7 @@ class StaffAdmin(admin.ModelAdmin):
 @admin.register(CollectionForm)
 class CollectionFormAdmin(admin.ModelAdmin):
     list_display = (
-        "first_name",
-        "last_name",
+        "full_name",
         "email",
         "phone_number",
         "plus_two_percentage",
