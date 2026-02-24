@@ -20,4 +20,11 @@ urlpatterns = [
     # Generic staff endpoints (AFTER specific routes)
     path('staff/', staff_list),
     path('staff/<int:pk>/', staff_detail),
+
+    # Organization endpoints
+    path('org-login/', views.org_login),
+    path('org-students/', views.org_students),
+    path('org-enquiries/', views.org_enquiries),
+    path('organizations/', views.org_list),
+    path('organizations/<int:pk>/', views.org_detail),
 ]

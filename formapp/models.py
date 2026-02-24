@@ -321,3 +321,21 @@ class Enquiry(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.phone}"
+
+
+class Organization(models.Model):
+    """Represents a college/organization that can view student data for their college."""
+    name = models.CharField(max_length=200, verbose_name="Organization Name")
+    login_id = models.CharField(max_length=50, unique=True, verbose_name="Login ID")
+    password = models.CharField(max_length=255, verbose_name="Password")  # Stored as hash
+    active_status = models.BooleanField(default=True, verbose_name="Active Status")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password)
+
+    def __str__(self):
+        return f"{self.name} ({self.login_id})"

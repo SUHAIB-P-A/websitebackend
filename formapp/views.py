@@ -6,9 +6,10 @@ from django.utils import timezone
 # ... (existing imports, add ModelViewSet)
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import CollectionForm, Staff, Enquiry, StaffDocument
-from .serializers import CollectionFormSerializer, StaffSerializer, EnquirySerializer, StaffDocumentSerializer
+from .models import CollectionForm, Staff, Enquiry, StaffDocument, Organization
+from .serializers import CollectionFormSerializer, StaffSerializer, EnquirySerializer, StaffDocumentSerializer, OrganizationSerializer
 from .utils import allocate_staff, redistribute_work
+
 
 # --- Staff Authentication & Management ---
 
@@ -369,3 +370,105 @@ def dashboard_stats(request):
         'recent_enquiries': recent_enquiries,
         'recent_students': recent_students
     })
+
+
+# --- Organization Login & Views ---
+
+@csrf_exempt
+@api_view(['POST'])
+def org_login(request):
+    """Login for Organization users (colleges). Returns org name and id."""
+    login_id = request.data.get('login_id', '').strip()
+    password = request.data.get('password', '').strip()
+
+    try:
+        org = Organization.objects.get(login_id__iexact=login_id)
+        if not org.active_status:
+            return Response({"error": "Organization account is inactive. Contact admin."}, status=status.HTTP_403_FORBIDDEN)
+        if org.check_password(password):
+            return Response({
+                "message": "Login successful",
+                "org_id": org.id,
+                "org_name": org.name,
+                "login_id": org.login_id,
+            })
+        else:
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+    except Organization.DoesNotExist:
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(['GET', 'POST'])
+def org_list(request):
+    """Admin only: List all organizations or create a new one."""
+    if request.method == 'GET':
+        orgs = Organization.objects.all().order_by('name')
+        serializer = OrganizationSerializer(orgs, many=True)
+        return Response(serializer.data)
+
+    if request.method == 'POST':
+        serializer = OrganizationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def org_detail(request, pk):
+    """Admin only: Get, update, or delete a single organization."""
+    try:
+        org = Organization.objects.get(pk=pk)
+    except Organization.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        serializer = OrganizationSerializer(org)
+        return Response(serializer.data)
+
+    elif request.method in ['PUT', 'PATCH']:
+        serializer = OrganizationSerializer(org, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        org.delete()
+        return Response({"message": "Organization deleted."}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def org_students(request):
+    """
+    Returns CollectionForm entries where colleges_selected contains the org's college name.
+    Org is identified by X-Org-Name header (name stored in localStorage after login).
+    """
+    org_name = request.headers.get('X-Org-Name', '').strip()
+    if not org_name:
+        return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Filter students where their selected colleges include this org's name
+    students = CollectionForm.objects.filter(
+        colleges_selected__icontains=org_name
+    ).order_by('-created_at')
+
+    serializer = CollectionFormSerializer(students, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+def org_enquiries(request):
+    """
+    Returns Enquiry entries where message or location contains the org's college name.
+    """
+    org_name = request.headers.get('X-Org-Name', '').strip()
+    if not org_name:
+        return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    enquiries = Enquiry.objects.filter(
+        Q(message__icontains=org_name) | Q(location__icontains=org_name)
+    ).order_by('-created_at')
+
+    serializer = EnquirySerializer(enquiries, many=True)
+    return Response(serializer.data)

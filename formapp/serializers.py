@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CollectionForm, Enquiry, Staff, StaffDocument
+from .models import CollectionForm, Enquiry, Staff, StaffDocument, Organization
 
 class StaffSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -90,3 +90,24 @@ class EnquirySerializer(serializers.ModelSerializer):
         if 'status' in attrs and attrs['status'] != 'Follow Up':
             attrs['follow_up_date'] = None
         return attrs
+
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = Organization
+        fields = ['id', 'name', 'login_id', 'password', 'active_status', 'created_at']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        org = Organization(**validated_data)
+        org.set_password(password)
+        org.save()
+        return org
+
+    def update(self, instance, validated_data):
+        if 'password' in validated_data:
+            password = validated_data.pop('password')
+            instance.set_password(password)
+        return super().update(instance, validated_data)
