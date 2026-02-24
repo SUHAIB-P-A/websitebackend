@@ -1,5 +1,4 @@
-from django.db.models import Count, Q, F, Value
-from django.db.models import ExpressionWrapper, IntegerField, QuerySet
+from django.db.models import Count, F, ExpressionWrapper, IntegerField
 from .models import Staff, CollectionForm, Enquiry
 
 def allocate_staff(instance):
@@ -28,20 +27,17 @@ def allocate_staff(instance):
     if not staff_data:
         return None
     
-    # Get the staff with minimum workload
+    # Get the staff with minimum workload and assign
     min_staff_id = staff_data.first()[0]
     selected_staff = Staff.objects.get(id=min_staff_id)
-    
-    if selected_staff:
-        instance.assigned_staff = selected_staff
-        # Save with all fields if it's new, otherwise just update assigned_staff
-        if instance.pk is None:
-            instance.save()
-        else:
-            instance.save(update_fields=['assigned_staff'])
-        return selected_staff
-    
-    return None
+
+    instance.assigned_staff = selected_staff
+    # Save only the changed field when updating an existing record
+    if instance.pk is None:
+        instance.save()
+    else:
+        instance.save(update_fields=['assigned_staff'])
+    return selected_staff
 
 def redistribute_work(staff_id):
     """
@@ -69,15 +65,6 @@ def redistribute_work(staff_id):
         for enquiry in enquiries:
             enquiry.assigned_staff = None
             allocate_staff(enquiry)
-            
-    except Staff.DoesNotExist:
-        pass
-            
-    except Staff.DoesNotExist:
-        pass
-            
-    except Staff.DoesNotExist:
-        pass
             
     except Staff.DoesNotExist:
         pass

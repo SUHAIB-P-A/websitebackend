@@ -11,9 +11,10 @@ class Staff(models.Model):
     role = models.CharField(max_length=10, default='staff', verbose_name="Role")
     
     # Profile Fields
+    # Optional secondary contact details
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Phone Number")
     secondary_phone = models.CharField(max_length=15, blank=True, null=True, verbose_name="Secondary Phone")
-    email_secondary = models.EmailField(blank=True, null=True, verbose_name="Secondary Email") # Optional but good to have? Requirement didn't ask, skipping.
+    email_secondary = models.EmailField(blank=True, null=True, verbose_name="Secondary Email")
     
     gender = models.CharField(max_length=10, blank=True, null=True, verbose_name="Gender")
     dob = models.DateField(blank=True, null=True, verbose_name="Date of Birth")
@@ -21,14 +22,13 @@ class Staff(models.Model):
     official_photo = models.TextField(blank=True, null=True, verbose_name="Official Staff Photo (Base64)") # Admin managed
     
     designation = models.CharField(max_length=100, blank=True, null=True, verbose_name="Designation")
-    department = models.CharField(max_length=100, blank=True, null=True, verbose_name="Department") # User didn't explicitly ask but it was in the UI code I saw earlier. I'll add it for completeness if I saw it.
-    address = models.TextField(blank=True, null=True, verbose_name="Address") # Detailed address
+    department = models.CharField(max_length=100, blank=True, null=True, verbose_name="Department")
+    address = models.TextField(blank=True, null=True, verbose_name="Address")
     date_of_joining = models.DateField(blank=True, null=True, verbose_name="Date of Joining")
     
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # StudentCount can be calculated dynamically...
-    # ...
+    # student_count is calculated dynamically via the `student_count` property below
 
     def set_password(self, raw_password):
         self.password = make_password(raw_password)
@@ -123,8 +123,7 @@ class CollectionForm(models.Model):
         blank=True
     )
 
-    # Legacy field - keeping for backward compatibility if needed, or we can reuse/remove.
-    # The requirement asks for "Aggregate Percentage%/CGPA". I'll use the new field for clarity.
+    # Legacy field — kept for backward compatibility with older data
     plus_two_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,

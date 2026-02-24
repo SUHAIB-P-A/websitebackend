@@ -1,19 +1,26 @@
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from rest_framework import status
+import os
+
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
-# ... (existing imports, add ModelViewSet)
-from rest_framework import viewsets
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework import status, viewsets
+from rest_framework.decorators import api_view
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+
 from .models import CollectionForm, Staff, Enquiry, StaffDocument, Organization
-from .serializers import CollectionFormSerializer, StaffSerializer, EnquirySerializer, StaffDocumentSerializer, OrganizationSerializer
+from .serializers import (
+    CollectionFormSerializer,
+    StaffSerializer,
+    EnquirySerializer,
+    StaffDocumentSerializer,
+    OrganizationSerializer,
+)
 from .utils import allocate_staff, redistribute_work
 
 
-# --- Staff Authentication & Management ---
-
-# ... (existing code up to staff_detail)
+# --- Staff Documents ---
 
 class StaffDocumentViewSet(viewsets.ModelViewSet):
     """
@@ -37,7 +44,6 @@ class StaffDocumentViewSet(viewsets.ModelViewSet):
 
 # --- Students / Collection Forms ---
 
-from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
 @api_view(['POST'])
@@ -49,11 +55,7 @@ def staff_login(request):
         # Case-insensitive lookup
         staff = Staff.objects.get(login_id__iexact=login_id)
         if staff.check_password(password):
-            # We allow login even if active_status is False (Offline for leads)
-            # if not staff.active_status:
-            #     return Response({"error": "Account is inactive"}, status=status.HTTP_403_FORBIDDEN)
-            
-            # Determine role
+            # Determine role based on login_id convention
             role = 'admin' if staff.login_id.lower() == 'admin' else 'staff'
 
             return Response({
@@ -108,9 +110,6 @@ def staff_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
-        import os
-        from django.conf import settings
-        
         # Collect deletion summary before deleting
         student_count = staff.assigned_students.count()
         enquiry_count = staff.assigned_enquiries.count()
@@ -325,7 +324,8 @@ def reallocate_leads(request):
     
     # Fetch Leads (IDs only for optimization)
     ids_to_update = list(Model.objects.filter(query).order_by('created_at').values_list('id', flat=True)[:count])
-    
+
+    updated_count = 0
     if ids_to_update:
         updated_count = Model.objects.filter(id__in=ids_to_update).update(assigned_staff=target_staff)
 
@@ -347,8 +347,8 @@ def dashboard_stats(request):
     # Base QuerySets
     enq_qs = Enquiry.objects.all()
     form_qs = CollectionForm.objects.all()
-    
-    # Appply Filters for Non-Admin
+
+    # Apply Filters for Non-Admin
     if role.lower() != 'admin' and staff_id and staff_id != 'null':
         enq_qs = enq_qs.filter(assigned_staff_id=staff_id)
         form_qs = form_qs.filter(assigned_staff_id=staff_id)
